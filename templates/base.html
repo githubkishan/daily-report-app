@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+{#
+  base.html is the shared "frame" of every page: the <head>, the styles,
+  the header with the menu, and the flash messages.
+
+  This is called "template inheritance". Each page starts with
+  {% extends "base.html" %} and only fills in the {% block ... %} parts
+  below. So the styles live in one place instead of being copied into
+  every page.
+#}
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Daily Report{% endblock %}</title>
+  <style>
+    :root { --navy: #1F3864; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, Segoe UI, Arial, sans-serif; background: #f4f6fa;
+           color: #222; margin: 0; }
+    header { background: var(--navy); color: white; padding: 20px 0; }
+    header .container { display: flex; align-items: center; justify-content: space-between;
+                        flex-wrap: wrap; gap: 10px; }
+    header h1 { margin: 0; font-size: 1.5rem; }
+    header nav a { color: white; margin-left: 16px; text-decoration: none; opacity: .85; }
+    header nav a:hover { opacity: 1; text-decoration: underline; }
+    .container { max-width: 800px; margin: 0 auto; padding: 0 16px; }
+    .card { background: white; border-radius: 8px; padding: 20px; margin: 20px 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+    h2 { color: var(--navy); margin-top: 0; font-size: 1.15rem; }
+    form.task-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+    label { display: flex; flex-direction: column; font-size: .85rem; gap: 4px; flex: 1 1 150px; }
+    label.small { flex: 0 1 90px; }
+    input, textarea { padding: 8px; border: 1px solid #c5cbd8; border-radius: 6px;
+                      font-size: 1rem; font-family: inherit; }
+    textarea { width: 100%; min-height: 90px; resize: vertical; }
+    input[readonly], textarea[readonly] { background: #f0f2f6; color: #555; }
+    button, .button { background: var(--navy); color: white; border: 0; border-radius: 6px;
+                      padding: 9px 16px; font-size: .95rem; cursor: pointer;
+                      text-decoration: none; display: inline-block; }
+    button:hover, .button:hover { opacity: .85; }
+    .secondary { background: #e3e7f0; color: var(--navy); }
+    .danger { background: #b3261e; }
+    .flash { background: #fdecea; color: #8a1c14; padding: 10px 14px; border-radius: 6px;
+             margin-top: 20px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 10px 6px; border-bottom: 1px solid #e3e7f0; }
+    th { color: var(--navy); font-size: .85rem; }
+    td.actions { white-space: nowrap; }
+    td.actions form { display: inline; }
+    .empty { color: #666; }
+    .total strong { color: var(--navy); font-size: 1.1rem; }
+    .start { background: #1b7f3b; }
+    .stop { background: #c26a00; }
+    .running { color: #1b7f3b; font-size: .8rem; }
+    .report-head { display: flex; align-items: center; justify-content: space-between;
+                   flex-wrap: wrap; gap: 10px; }
+    .report-head h2 { margin: 0; }
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 999px;
+             font-size: .8rem; font-weight: 600; }
+    .badge.draft { background: #fff4d6; color: #7a5600; }
+    .badge.synced { background: #dff3e5; color: #1b6b34; }
+    .button-row { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+    .plain-text { white-space: pre-wrap; margin: 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1>Daily Report</h1>
+      <nav>
+        <a href="{{ url_for('index') }}">Today</a>
+        <a href="{{ url_for('history') }}">History</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    {# Show any messages saved by flash() in app.py #}
+    {% for message in get_flashed_messages() %}
+      <div class="flash">{{ message }}</div>
+    {% endfor %}
+
+    {# Each page puts its own content here #}
+    {% block content %}{% endblock %}
+  </div>
+</body>
+</html>

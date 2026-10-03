@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}{{ report_date }} – Daily Report{% endblock %}
+
+{% block content %}
+  {# A read-only view of one day: no forms, just the saved values. #}
+  <div class="card">
+    <div class="report-head">
+      <h2>Report for {{ report_date }}</h2>
+      {% if report and report.status == 'synced' %}
+        <span class="badge synced">Synced</span>
+      {% else %}
+        <span class="badge draft">Draft</span>
+      {% endif %}
+    </div>
+    {% if profile %}
+      <p>{{ profile.name }}{% if profile.role %} · {{ profile.role }}{% endif %}</p>
+    {% endif %}
+    <p><strong>Subject:</strong> {{ report.subject if report and report.subject else '–' }}</p>
+    <p class="total">Tracked: <strong>{{ total_seconds | duration }}</strong></p>
+  </div>
+
+  <div class="card">
+    <h2>Tasks</h2>
+    {% if tasks %}
+      <table>
+        <tr><th>Title</th><th>Hours</th><th>Tracked</th></tr>
+        {% for task in tasks %}
+          <tr>
+            <td>
+              {{ task.title }}
+              {% if task.link %}
+                {% if task.link.startswith('http://') or task.link.startswith('https://') %}
+                  <br><a href="{{ task.link }}" target="_blank" rel="noopener noreferrer">{{ task.link }}</a>
+                {% else %}
+                  <br><small>{{ task.link }}</small>
+                {% endif %}
+              {% endif %}
+            </td>
+            <td>{{ task.hours }}</td>
+            <td>{{ tracked.get(task.id, 0) | duration }}</td>
+          </tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p class="empty">No tasks on this day.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>Tomorrow's plan</h2>
+    {# white-space: pre-wrap (class plain-text) keeps the line breaks you typed #}
+    <p class="plain-text">{{ report.tomorrow_plan if report and report.tomorrow_plan else '–' }}</p>
+  </div>
+
+  <a class="button secondary" href="{{ url_for('history') }}">&larr; Back to history</a>
+{% endblock %}

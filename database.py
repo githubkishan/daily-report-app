@@ -4,8 +4,9 @@
 
 import sqlite3
 # datetime is part of Python's standard library (nothing to pip install).
-# We use it to read the computer's clock when a timer starts or stops.
-from datetime import datetime
+# We use it to read the computer's clock when a timer starts or stops,
+# and to know today's date for the daily report.
+from datetime import date, datetime
 
 # The database is a single file that sits next to the code.
 DATABASE_FILE = "reports.db"
@@ -27,6 +28,13 @@ def now_text():
     fixed format. SQLite's date functions understand it.
     """
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def today_text():
+    """Return today's date as text, e.g. "2026-10-03" (YYYY-MM-DD)."""
+    # isoformat() gives exactly the YYYY-MM-DD format. Dates in this format
+    # also sort correctly as plain text: "2026-09-30" < "2026-10-03".
+    return date.today().isoformat()
 
 
 def init_db():
@@ -69,17 +77,70 @@ def init_db():
         ON time_sessions (task_id) WHERE end_time IS NULL
         """
     )
+
+    # The profile table. The app only ever uses one row (your profile).
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS profile (
+            id    INTEGER PRIMARY KEY AUTOINCREMENT,
+            name  TEXT NOT NULL,
+            role  TEXT
+        )
+        """
+    )
+
+    # One row per day's report.
+    # - UNIQUE on report_date: the database refuses a second report for the
+    #   same day.
+    # - CHECK (...) is a rule the database tests on every insert/update, so
+    #   status can only ever be 'draft' or 'synced'.
+    # - DEFAULT 'draft': a new report starts as a draft automatically.
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS daily_reports (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            report_date    TEXT NOT NULL UNIQUE,
+            subject        TEXT NOT NULL DEFAULT '',
+            tomorrow_plan  TEXT NOT NULL DEFAULT '',
+            status         TEXT NOT NULL DEFAULT 'draft'
+                           CHECK (status IN ('draft', 'synced'))
+        )
+        """
+    )
+
+    # Give every task a report_date so we know which day it belongs to.
+    #
+    # ALTER TABLE changes a table that already exists. "ADD COLUMN" adds a
+    # new column to it; all existing rows get NULL (empty) in that column.
+    # CREATE TABLE IF NOT EXISTS can't do this: if the tasks table is
+    # already there, it does nothing at all, even if the columns differ.
+    #
+    # SQLite has no "ADD COLUMN IF NOT EXISTS", and adding a column twice
+    # is an error. So we first ask SQLite which columns tasks has:
+    # "PRAGMA table_info(tasks)" returns one row per column, and
+    # row["name"] is the column's name.
+    columns = connection.execute("PRAGMA table_info(tasks)").fetchall()
+    column_names = [column["name"] for column in columns]
+    if "report_date" not in column_names:
+        connection.execute("ALTER TABLE tasks ADD COLUMN report_date TEXT")
+        # The new column is empty for old tasks: put them on today's report.
+        connection.execute(
+            "UPDATE tasks SET report_date = ? WHERE report_date IS NULL",
+            (today_text(),),
+        )
+
     connection.commit()
     connection.close()
 
 
-def get_all_tasks():
-    """Return every task, newest first."""
+def get_tasks_for_date(report_date):
+    """Return the tasks of one day (YYYY-MM-DD), newest first."""
     connection = get_connection()
     # id is the tie-breaker: tasks created in the same second
     # still come out newest first.
     tasks = connection.execute(
-        "SELECT * FROM tasks ORDER BY created_at DESC, id DESC"
+        "SELECT * FROM tasks WHERE report_date = ? ORDER BY created_at DESC, id DESC",
+        (report_date,),
     ).fetchall()
     connection.close()
     return tasks
@@ -96,11 +157,11 @@ def get_task(task_id):
 
 
 def add_task(title, link, hours):
-    """Insert a new task. The ? marks are filled in safely by sqlite3."""
+    """Insert a new task on today's report. The ? marks are filled in safely by sqlite3."""
     connection = get_connection()
     connection.execute(
-        "INSERT INTO tasks (title, link, hours) VALUES (?, ?, ?)",
-        (title, link, hours),
+        "INSERT INTO tasks (title, link, hours, report_date) VALUES (?, ?, ?, ?)",
+        (title, link, hours, today_text()),
     )
     connection.commit()
     connection.close()
@@ -213,3 +274,104 @@ def get_running_timers():
     ).fetchall()
     connection.close()
     return {row["task_id"]: row["start_time"] for row in rows}
+
+
+# ---------------------------------------------------------------------------
+# Profile
+# ---------------------------------------------------------------------------
+
+
+def get_profile():
+    """Return the profile row, or None if it hasn't been saved yet."""
+    connection = get_connection()
+    # LIMIT 1: we only ever use one row, so take the first one.
+    profile = connection.execute(
+        "SELECT * FROM profile ORDER BY id LIMIT 1"
+    ).fetchone()
+    connection.close()
+    return profile
+
+
+def save_profile(name, role):
+    """Create the profile the first time (INSERT), change it after that (UPDATE)."""
+    connection = get_connection()
+    existing = connection.execute(
+        "SELECT id FROM profile ORDER BY id LIMIT 1"
+    ).fetchone()
+    if existing is None:
+        connection.execute(
+            "INSERT INTO profile (name, role) VALUES (?, ?)", (name, role)
+        )
+    else:
+        connection.execute(
+            "UPDATE profile SET name = ?, role = ? WHERE id = ?",
+            (name, role, existing["id"]),
+        )
+    connection.commit()
+    connection.close()
+
+
+# ---------------------------------------------------------------------------
+# Daily reports
+# ---------------------------------------------------------------------------
+
+
+def get_report(report_date):
+    """Return the report for one day (YYYY-MM-DD), or None if there is none yet."""
+    connection = get_connection()
+    report = connection.execute(
+        "SELECT * FROM daily_reports WHERE report_date = ?", (report_date,)
+    ).fetchone()
+    connection.close()
+    return report
+
+
+def get_all_reports():
+    """Return every saved report, newest day first (for the History page)."""
+    connection = get_connection()
+    reports = connection.execute(
+        "SELECT * FROM daily_reports ORDER BY report_date DESC"
+    ).fetchall()
+    connection.close()
+    return reports
+
+
+def save_report(report_date, subject, tomorrow_plan, status):
+    """
+    Save the subject and tomorrow's plan of a day's report, and set its status.
+    Only works while the report is a draft: a synced report is locked.
+    Returns True if it was saved, False if the report was locked.
+    """
+    connection = get_connection()
+    # INSERT OR IGNORE: create the day's report row if it doesn't exist yet.
+    # If it already exists, the UNIQUE rule on report_date would fail, and
+    # "OR IGNORE" tells SQLite to quietly skip the insert instead.
+    # After this line the row is guaranteed to exist.
+    connection.execute(
+        "INSERT OR IGNORE INTO daily_reports (report_date) VALUES (?)",
+        (report_date,),
+    )
+    # "AND status = 'draft'" means a synced report is never changed here.
+    cursor = connection.execute(
+        """
+        UPDATE daily_reports
+        SET subject = ?, tomorrow_plan = ?, status = ?
+        WHERE report_date = ? AND status = 'draft'
+        """,
+        (subject, tomorrow_plan, status, report_date),
+    )
+    connection.commit()
+    saved = cursor.rowcount > 0
+    connection.close()
+    return saved
+
+
+def unlock_report(report_date):
+    """Set a synced report back to draft so it can be edited again."""
+    connection = get_connection()
+    connection.execute(
+        "UPDATE daily_reports SET status = 'draft' WHERE report_date = ?",
+        (report_date,),
+    )
+    connection.commit()
+    connection.close()
