@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Daily Report</title>
+  <style>
+    :root { --navy: #1F3864; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, Segoe UI, Arial, sans-serif; background: #f4f6fa;
+           color: #222; margin: 0; }
+    header { background: var(--navy); color: white; padding: 20px 0; }
+    header h1 { margin: 0; font-size: 1.5rem; }
+    .container { max-width: 800px; margin: 0 auto; padding: 0 16px; }
+    .card { background: white; border-radius: 8px; padding: 20px; margin: 20px 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+    h2 { color: var(--navy); margin-top: 0; font-size: 1.15rem; }
+    form.task-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+    label { display: flex; flex-direction: column; font-size: .85rem; gap: 4px; flex: 1 1 150px; }
+    label.small { flex: 0 1 90px; }
+    input { padding: 8px; border: 1px solid #c5cbd8; border-radius: 6px; font-size: 1rem; }
+    button, .button { background: var(--navy); color: white; border: 0; border-radius: 6px;
+                      padding: 9px 16px; font-size: .95rem; cursor: pointer;
+                      text-decoration: none; display: inline-block; }
+    button:hover, .button:hover { opacity: .85; }
+    .secondary { background: #e3e7f0; color: var(--navy); }
+    .danger { background: #b3261e; }
+    .flash { background: #fdecea; color: #8a1c14; padding: 10px 14px; border-radius: 6px;
+             margin-top: 20px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 10px 6px; border-bottom: 1px solid #e3e7f0; }
+    th { color: var(--navy); font-size: .85rem; }
+    td.actions { white-space: nowrap; }
+    td.actions form { display: inline; }
+    .empty { color: #666; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container"><h1>Daily Report</h1></div>
+  </header>
+
+  <div class="container">
+
+    {# Show any validation messages saved by flash() in app.py #}
+    {% for message in get_flashed_messages() %}
+      <div class="flash">{{ message }}</div>
+    {% endfor %}
+
+    <div class="card">
+      {% if editing %}
+        {# Edit mode: the form posts to /edit-task/<id> and is filled with the current values #}
+        <h2>Edit task</h2>
+        <form class="task-form" method="POST" action="{{ url_for('edit_task', task_id=editing.id) }}">
+          <label>Title <input type="text" name="title" value="{{ editing.title }}" required></label>
+          <label>Link (optional) <input type="text" name="link" value="{{ editing.link }}"></label>
+          <label class="small">Hours <input type="number" name="hours" step="0.25" min="0" max="24" value="{{ editing.hours }}" required></label>
+          <button type="submit">Save</button>
+          <a class="button secondary" href="{{ url_for('index') }}">Cancel</a>
+        </form>
+      {% else %}
+        <h2>Add a task</h2>
+        <form class="task-form" method="POST" action="{{ url_for('add_task') }}">
+          <label>Title <input type="text" name="title" required></label>
+          <label>Link (optional) <input type="text" name="link"></label>
+          <label class="small">Hours <input type="number" name="hours" step="0.25" min="0" max="24" required></label>
+          <button type="submit">Add</button>
+        </form>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>Tasks</h2>
+      {% if tasks %}
+        <table>
+          <tr><th>Title</th><th>Hours</th><th>Added</th><th></th></tr>
+          {# Jinja auto-escapes {{ }} values, so user text can't inject HTML. #}
+          {% for task in tasks %}
+            <tr>
+              <td>
+                {{ task.title }}
+                {% if task.link %}
+                  {# Only make it a clickable link if it is a web address #}
+                  {% if task.link.startswith('http://') or task.link.startswith('https://') %}
+                    <br><a href="{{ task.link }}" target="_blank" rel="noopener noreferrer">{{ task.link }}</a>
+                  {% else %}
+                    <br><small>{{ task.link }}</small>
+                  {% endif %}
+                {% endif %}
+              </td>
+              <td>{{ task.hours }}</td>
+              <td>{{ task.created_at }}</td>
+              <td class="actions">
+                <a class="button secondary" href="{{ url_for('edit_task_page', task_id=task.id) }}">Edit</a>
+                <form method="POST" action="{{ url_for('delete_task', task_id=task.id) }}"
+                      onsubmit="return confirm('Delete this task?');">
+                  <button type="submit" class="danger">Delete</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </table>
+      {% else %}
+        <p class="empty">No tasks yet. Add your first one above.</p>
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>
