@@ -1,7 +1,9 @@
 # Daily Report
 
 A small Flask + SQLite app for logging the tasks you work on each day.
-You can add, list, edit and delete tasks (title, optional link, hours).
+You can add, list, edit and delete tasks (title, optional link, hours),
+track time on each task with a Start/Stop timer, write a daily report
+(subject + tomorrow's plan) and look back at past reports on the History page.
 
 ## Setup on Windows
 
@@ -21,7 +23,10 @@ The database file `reports.db` is created automatically on first run.
 
 - `app.py` – the Flask routes (what happens at each URL)
 - `database.py` – all the SQLite code
-- `templates/index.html` – the page (HTML + Jinja2)
+- `templates/base.html` – the shared page frame (styles, header, menu)
+- `templates/index.html` – today's report page
+- `templates/history.html` – the list of past reports
+- `templates/report.html` – one past day, read-only
 
 ## How it works
 
@@ -47,3 +52,39 @@ re-submit the form (which would add the task twice).
 
 **Validation errors** use `flash()`: the route stores a message, redirects,
 and the template shows it once.
+
+## How the time tracker works
+
+- Each press of **Start** adds a row to the `time_sessions` table with the
+  task's id and the current time in `start_time`. `end_time` stays empty
+  (NULL), which means "this timer is running".
+- While a session is running the task shows **Stop** instead of Start.
+  Pressing Stop fills in `end_time` on that row. A unique index in the
+  database makes sure a task can only have one running session at a time.
+- The **Tracked** column adds up the length (`end_time - start_time`) of a
+  task's finished sessions and shows it like `1h 25m`. The total at the top
+  of the page adds up all tasks. A running session is counted once you stop it.
+- Deleting a task also deletes its time sessions.
+- The table is created with `CREATE TABLE IF NOT EXISTS` when the app
+  starts, so an existing `reports.db` keeps its tasks and just gets the new
+  table.
+
+## How profile and report status work
+
+- **Profile.** The `profile` table only ever uses one row. The first time you
+  press *Save profile* the app INSERTs it; after that it UPDATEs the same row.
+- **One report per day.** `daily_reports` has one row per date
+  (`report_date` is UNIQUE). The row is created the first time you press
+  *Save draft* or *Mark as synced* for that day.
+- **Tasks belong to a day.** `tasks` has a `report_date` column, and new tasks
+  get today's date. The Today page only shows today's tasks. The column was
+  added to existing databases with `ALTER TABLE ... ADD COLUMN`, which only
+  runs when the column is missing; tasks you had before got the date of the
+  day you first started this version.
+- **Draft vs synced.** A report starts as `draft`.
+  - *Save draft* saves the subject and tomorrow's plan; it stays a draft.
+  - *Mark as synced* saves them and sets the status to `synced`. The fields
+    become read-only, and saving is refused while the report is synced.
+  - *Unlock to edit* sets it back to `draft` so you can change it again.
+- **History.** `/history` lists every saved report with its status and
+  subject. Click a date to open `/report/<date>`, a read-only view of that day.

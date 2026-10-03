@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}History – Daily Report{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <h2>History</h2>
+    {% if reports %}
+      <table>
+        <tr><th>Date</th><th>Status</th><th>Subject</th></tr>
+        {% for report in reports %}
+          <tr>
+            {# url_for builds the link, e.g. /report/2026-10-03 #}
+            <td><a href="{{ url_for('view_report', report_date=report.report_date) }}">{{ report.report_date }}</a></td>
+            <td>
+              {# The CSS class is the status itself: "badge draft" or "badge synced" #}
+              <span class="badge {{ report.status }}">{{ report.status | capitalize }}</span>
+            </td>
+            <td>{{ report.subject or '–' }}</td>
+          </tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p class="empty">No saved reports yet. Save a draft on the Today page first.</p>
+    {% endif %}
+  </div>
+{% endblock %}

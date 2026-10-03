@@ -1,109 +1,156 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Daily Report</title>
-  <style>
-    :root { --navy: #1F3864; }
-    * { box-sizing: border-box; }
-    body { font-family: system-ui, Segoe UI, Arial, sans-serif; background: #f4f6fa;
-           color: #222; margin: 0; }
-    header { background: var(--navy); color: white; padding: 20px 0; }
-    header h1 { margin: 0; font-size: 1.5rem; }
-    .container { max-width: 800px; margin: 0 auto; padding: 0 16px; }
-    .card { background: white; border-radius: 8px; padding: 20px; margin: 20px 0;
-            box-shadow: 0 1px 3px rgba(0,0,0,.1); }
-    h2 { color: var(--navy); margin-top: 0; font-size: 1.15rem; }
-    form.task-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
-    label { display: flex; flex-direction: column; font-size: .85rem; gap: 4px; flex: 1 1 150px; }
-    label.small { flex: 0 1 90px; }
-    input { padding: 8px; border: 1px solid #c5cbd8; border-radius: 6px; font-size: 1rem; }
-    button, .button { background: var(--navy); color: white; border: 0; border-radius: 6px;
-                      padding: 9px 16px; font-size: .95rem; cursor: pointer;
-                      text-decoration: none; display: inline-block; }
-    button:hover, .button:hover { opacity: .85; }
-    .secondary { background: #e3e7f0; color: var(--navy); }
-    .danger { background: #b3261e; }
-    .flash { background: #fdecea; color: #8a1c14; padding: 10px 14px; border-radius: 6px;
-             margin-top: 20px; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { text-align: left; padding: 10px 6px; border-bottom: 1px solid #e3e7f0; }
-    th { color: var(--navy); font-size: .85rem; }
-    td.actions { white-space: nowrap; }
-    td.actions form { display: inline; }
-    .empty { color: #666; }
-  </style>
-</head>
-<body>
-  <header>
-    <div class="container"><h1>Daily Report</h1></div>
-  </header>
+{% extends "base.html" %}
 
-  <div class="container">
+{% block content %}
 
-    {# Show any validation messages saved by flash() in app.py #}
-    {% for message in get_flashed_messages() %}
-      <div class="flash">{{ message }}</div>
-    {% endfor %}
+  {#
+    {% set %} creates a variable inside the template.
+    "locked" is True when today's report exists and is synced.
+    We use it below to make the fields read-only and swap the buttons.
+  #}
+  {% set locked = report and report.status == 'synced' %}
 
-    <div class="card">
-      {% if editing %}
-        {# Edit mode: the form posts to /edit-task/<id> and is filled with the current values #}
-        <h2>Edit task</h2>
-        <form class="task-form" method="POST" action="{{ url_for('edit_task', task_id=editing.id) }}">
-          <label>Title <input type="text" name="title" value="{{ editing.title }}" required></label>
-          <label>Link (optional) <input type="text" name="link" value="{{ editing.link }}"></label>
-          <label class="small">Hours <input type="number" name="hours" step="0.25" min="0" max="24" value="{{ editing.hours }}" required></label>
-          <button type="submit">Save</button>
-          <a class="button secondary" href="{{ url_for('index') }}">Cancel</a>
-        </form>
-      {% else %}
-        <h2>Add a task</h2>
-        <form class="task-form" method="POST" action="{{ url_for('add_task') }}">
-          <label>Title <input type="text" name="title" required></label>
-          <label>Link (optional) <input type="text" name="link"></label>
-          <label class="small">Hours <input type="number" name="hours" step="0.25" min="0" max="24" required></label>
-          <button type="submit">Add</button>
-        </form>
-      {% endif %}
-    </div>
-
-    <div class="card">
-      <h2>Tasks</h2>
-      {% if tasks %}
-        <table>
-          <tr><th>Title</th><th>Hours</th><th>Added</th><th></th></tr>
-          {# Jinja auto-escapes {{ }} values, so user text can't inject HTML. #}
-          {% for task in tasks %}
-            <tr>
-              <td>
-                {{ task.title }}
-                {% if task.link %}
-                  {# Only make it a clickable link if it is a web address #}
-                  {% if task.link.startswith('http://') or task.link.startswith('https://') %}
-                    <br><a href="{{ task.link }}" target="_blank" rel="noopener noreferrer">{{ task.link }}</a>
-                  {% else %}
-                    <br><small>{{ task.link }}</small>
-                  {% endif %}
-                {% endif %}
-              </td>
-              <td>{{ task.hours }}</td>
-              <td>{{ task.created_at }}</td>
-              <td class="actions">
-                <a class="button secondary" href="{{ url_for('edit_task_page', task_id=task.id) }}">Edit</a>
-                <form method="POST" action="{{ url_for('delete_task', task_id=task.id) }}"
-                      onsubmit="return confirm('Delete this task?');">
-                  <button type="submit" class="danger">Delete</button>
-                </form>
-              </td>
-            </tr>
-          {% endfor %}
-        </table>
-      {% else %}
-        <p class="empty">No tasks yet. Add your first one above.</p>
-      {% endif %}
-    </div>
+  {# ---------- Profile ---------- #}
+  <div class="card">
+    <h2>Profile</h2>
+    {# profile is None until the first save, so "profile.name if profile" avoids an error #}
+    <form class="task-form" method="POST" action="{{ url_for('save_profile') }}">
+      <label>Name <input type="text" name="name" value="{{ profile.name if profile else '' }}" required></label>
+      <label>Role <input type="text" name="role" value="{{ profile.role if profile else '' }}"></label>
+      <button type="submit">Save profile</button>
+    </form>
   </div>
-</body>
-</html>
+
+  {# ---------- Today's report: header and subject ---------- #}
+  <div class="card">
+    <div class="report-head">
+      <h2>Report for {{ today }}</h2>
+      {% if locked %}
+        <span class="badge synced">Synced</span>
+      {% else %}
+        <span class="badge draft">Draft</span>
+      {% endif %}
+    </div>
+    <p class="total">Tracked today: <strong>{{ total_seconds | duration }}</strong></p>
+
+    {#
+      The subject input sits up here, but the report <form> is further down
+      (next to tomorrow's plan). HTML forms can't be nested inside each
+      other, and the task forms are in between. The form="report-form"
+      attribute solves this: it says "this input belongs to the form whose
+      id is report-form", wherever that form is on the page.
+    #}
+    <label>Subject
+      <input type="text" name="subject" form="report-form"
+             value="{{ report.subject if report else '' }}"
+             {% if locked %}readonly{% endif %}>
+    </label>
+  </div>
+
+  {# ---------- Add / edit a task ---------- #}
+  <div class="card">
+    {% if editing %}
+      {# Edit mode: the form posts to /edit-task/<id> and is filled with the current values #}
+      <h2>Edit task</h2>
+      <form class="task-form" method="POST" action="{{ url_for('edit_task', task_id=editing.id) }}">
+        <label>Title <input type="text" name="title" value="{{ editing.title }}" required></label>
+        <label>Link (optional) <input type="text" name="link" value="{{ editing.link }}"></label>
+        <label class="small">Hours <input type="number" name="hours" step="0.25" min="0" max="24" value="{{ editing.hours }}" required></label>
+        <button type="submit">Save</button>
+        <a class="button secondary" href="{{ url_for('index') }}">Cancel</a>
+      </form>
+    {% else %}
+      <h2>Add a task</h2>
+      <form class="task-form" method="POST" action="{{ url_for('add_task') }}">
+        <label>Title <input type="text" name="title" required></label>
+        <label>Link (optional) <input type="text" name="link"></label>
+        <label class="small">Hours <input type="number" name="hours" step="0.25" min="0" max="24" required></label>
+        <button type="submit">Add</button>
+      </form>
+    {% endif %}
+  </div>
+
+  {# ---------- Today's tasks ---------- #}
+  <div class="card">
+    <h2>Tasks</h2>
+    {% if tasks %}
+      <table>
+        <tr><th>Title</th><th>Hours</th><th>Tracked</th><th>Added</th><th></th></tr>
+        {# Jinja auto-escapes {{ }} values, so user text can't inject HTML. #}
+        {% for task in tasks %}
+          <tr>
+            <td>
+              {{ task.title }}
+              {% if task.link %}
+                {# Only make it a clickable link if it is a web address #}
+                {% if task.link.startswith('http://') or task.link.startswith('https://') %}
+                  <br><a href="{{ task.link }}" target="_blank" rel="noopener noreferrer">{{ task.link }}</a>
+                {% else %}
+                  <br><small>{{ task.link }}</small>
+                {% endif %}
+              {% endif %}
+            </td>
+            <td>{{ task.hours }}</td>
+            <td>
+              {# tracked.get(id, 0): use 0 when this task has no finished sessions yet #}
+              {{ tracked.get(task.id, 0) | duration }}
+              {% if task.id in running %}
+                {# start_time looks like "2026-10-03 14:05:09"; [11:16] cuts out "14:05" #}
+                <br><span class="running">&#9679; running since {{ running[task.id][11:16] }}</span>
+              {% endif %}
+            </td>
+            <td>{{ task.created_at }}</td>
+            <td class="actions">
+              {# Show Stop while a session is running, otherwise Start #}
+              {% if task.id in running %}
+                <form method="POST" action="{{ url_for('stop_timer', task_id=task.id) }}">
+                  <button type="submit" class="stop">Stop</button>
+                </form>
+              {% else %}
+                <form method="POST" action="{{ url_for('start_timer', task_id=task.id) }}">
+                  <button type="submit" class="start">Start</button>
+                </form>
+              {% endif %}
+              <a class="button secondary" href="{{ url_for('edit_task_page', task_id=task.id) }}">Edit</a>
+              <form method="POST" action="{{ url_for('delete_task', task_id=task.id) }}"
+                    onsubmit="return confirm('Delete this task and its tracked time?');">
+                <button type="submit" class="danger">Delete</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p class="empty">No tasks yet. Add your first one above.</p>
+    {% endif %}
+  </div>
+
+  {# ---------- Tomorrow's plan and the report buttons ---------- #}
+  <div class="card">
+    <form id="report-form" method="POST" action="{{ url_for('save_report') }}">
+      <label>Tomorrow's plan
+        <textarea name="tomorrow_plan" {% if locked %}readonly{% endif %}>{{ report.tomorrow_plan if report else '' }}</textarea>
+      </label>
+
+      {% if not locked %}
+        <div class="button-row">
+          {# This button sends the form to the form's own action: /save-report #}
+          <button type="submit">Save draft</button>
+          {#
+            formaction="..." sends the SAME form to a different URL when this
+            particular button is clicked. So both buttons share the subject
+            and plan fields, but go to different routes.
+          #}
+          <button type="submit" class="start" formaction="{{ url_for('mark_synced') }}">Mark as synced</button>
+        </div>
+      {% endif %}
+    </form>
+
+    {% if locked %}
+      {# A separate small form: unlocking doesn't need the subject or plan #}
+      <form method="POST" action="{{ url_for('unlock_report') }}" class="button-row">
+        <button type="submit" class="secondary">Unlock to edit</button>
+      </form>
+    {% endif %}
+  </div>
+
+{% endblock %}
