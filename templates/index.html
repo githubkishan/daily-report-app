@@ -33,6 +33,11 @@
     td.actions { white-space: nowrap; }
     td.actions form { display: inline; }
     .empty { color: #666; }
+    .total { font-size: 1.05rem; }
+    .total strong { color: var(--navy); font-size: 1.3rem; }
+    .start { background: #1b7f3b; }
+    .stop { background: #c26a00; }
+    .running { color: #1b7f3b; font-size: .8rem; }
   </style>
 </head>
 <body>
@@ -46,6 +51,11 @@
     {% for message in get_flashed_messages() %}
       <div class="flash">{{ message }}</div>
     {% endfor %}
+
+    {# Grand total of all finished timer sessions (total_seconds comes from app.py) #}
+    <div class="card total">
+      Total tracked time: <strong>{{ total_seconds | duration }}</strong>
+    </div>
 
     <div class="card">
       {% if editing %}
@@ -73,7 +83,7 @@
       <h2>Tasks</h2>
       {% if tasks %}
         <table>
-          <tr><th>Title</th><th>Hours</th><th>Added</th><th></th></tr>
+          <tr><th>Title</th><th>Hours</th><th>Tracked</th><th>Added</th><th></th></tr>
           {# Jinja auto-escapes {{ }} values, so user text can't inject HTML. #}
           {% for task in tasks %}
             <tr>
@@ -89,11 +99,29 @@
                 {% endif %}
               </td>
               <td>{{ task.hours }}</td>
+              <td>
+                {# tracked.get(id, 0): use 0 when this task has no finished sessions yet #}
+                {{ tracked.get(task.id, 0) | duration }}
+                {% if task.id in running %}
+                  {# start_time looks like "2026-10-03 14:05:09"; [11:16] cuts out "14:05" #}
+                  <br><span class="running">&#9679; running since {{ running[task.id][11:16] }}</span>
+                {% endif %}
+              </td>
               <td>{{ task.created_at }}</td>
               <td class="actions">
+                {# Show Stop while a session is running, otherwise Start #}
+                {% if task.id in running %}
+                  <form method="POST" action="{{ url_for('stop_timer', task_id=task.id) }}">
+                    <button type="submit" class="stop">Stop</button>
+                  </form>
+                {% else %}
+                  <form method="POST" action="{{ url_for('start_timer', task_id=task.id) }}">
+                    <button type="submit" class="start">Start</button>
+                  </form>
+                {% endif %}
                 <a class="button secondary" href="{{ url_for('edit_task_page', task_id=task.id) }}">Edit</a>
                 <form method="POST" action="{{ url_for('delete_task', task_id=task.id) }}"
-                      onsubmit="return confirm('Delete this task?');">
+                      onsubmit="return confirm('Delete this task and its tracked time?');">
                   <button type="submit" class="danger">Delete</button>
                 </form>
               </td>

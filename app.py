@@ -39,11 +39,42 @@ def check_task_form(form):
     return title, link, hours, None
 
 
+# A "template filter" is a small function you can use inside the HTML
+# template with a pipe: {{ 5100 | duration }} shows "1h 25m".
+# The @app.template_filter(...) line (a "decorator") registers it with Flask.
+@app.template_filter("duration")
+def format_duration(seconds):
+    """Turn a number of seconds into text like "1h 25m" (or "0m")."""
+    # // is whole-number division: 5100 // 3600 = 1 (the remainder is dropped).
+    # % gives the remainder: 5100 % 3600 = 1500 seconds left over.
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    if hours > 0:
+        return f"{hours}h {minutes}m"
+    return f"{minutes}m"
+
+
+def render_task_page(editing):
+    """Load everything the page needs and draw index.html."""
+    tasks = database.get_all_tasks()
+    tracked = database.get_tracked_seconds()   # {task_id: seconds}
+    running = database.get_running_timers()    # {task_id: start_time}
+    # sum() adds up every value in the dictionary = the grand total.
+    total_seconds = sum(tracked.values())
+    return render_template(
+        "index.html",
+        tasks=tasks,
+        editing=editing,
+        tracked=tracked,
+        running=running,
+        total_seconds=total_seconds,
+    )
+
+
 @app.route("/")
 def index():
     """Show the add-task form and the list of tasks."""
-    tasks = database.get_all_tasks()
-    return render_template("index.html", tasks=tasks, editing=None)
+    return render_task_page(editing=None)
 
 
 @app.route("/add-task", methods=["POST"])
@@ -72,8 +103,7 @@ def edit_task_page(task_id):
     if task is None:
         flash("That task no longer exists.")
         return redirect(url_for("index"))
-    tasks = database.get_all_tasks()
-    return render_template("index.html", tasks=tasks, editing=task)
+    return render_task_page(editing=task)
 
 
 @app.route("/edit-task/<int:task_id>", methods=["POST"])
@@ -88,7 +118,25 @@ def edit_task(task_id):
     return redirect(url_for("index"))
 
 
-# Create the table when the app starts (does nothing if it already exists).
+@app.route("/start-timer/<int:task_id>", methods=["POST"])
+def start_timer(task_id):
+    """Start the timer for one task."""
+    if database.get_task(task_id) is None:
+        flash("That task no longer exists.")
+    elif not database.start_timer(task_id):
+        flash("The timer for that task is already running.")
+    return redirect(url_for("index"))
+
+
+@app.route("/stop-timer/<int:task_id>", methods=["POST"])
+def stop_timer(task_id):
+    """Stop the running timer for one task."""
+    if not database.stop_timer(task_id):
+        flash("There was no running timer to stop.")
+    return redirect(url_for("index"))
+
+
+# Create the tables when the app starts (does nothing if they already exist).
 database.init_db()
 
 if __name__ == "__main__":

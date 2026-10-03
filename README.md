@@ -1,7 +1,8 @@
 # Daily Report
 
 A small Flask + SQLite app for logging the tasks you work on each day.
-You can add, list, edit and delete tasks (title, optional link, hours).
+You can add, list, edit and delete tasks (title, optional link, hours),
+and track time on each task with a Start/Stop timer.
 
 ## Setup on Windows
 
@@ -47,3 +48,19 @@ re-submit the form (which would add the task twice).
 
 **Validation errors** use `flash()`: the route stores a message, redirects,
 and the template shows it once.
+
+## How the time tracker works
+
+- Each press of **Start** adds a row to the `time_sessions` table with the
+  task's id and the current time in `start_time`. `end_time` stays empty
+  (NULL), which means "this timer is running".
+- While a session is running the task shows **Stop** instead of Start.
+  Pressing Stop fills in `end_time` on that row. A unique index in the
+  database makes sure a task can only have one running session at a time.
+- The **Tracked** column adds up the length (`end_time - start_time`) of a
+  task's finished sessions and shows it like `1h 25m`. The total at the top
+  of the page adds up all tasks. A running session is counted once you stop it.
+- Deleting a task also deletes its time sessions.
+- The table is created with `CREATE TABLE IF NOT EXISTS` when the app
+  starts, so an existing `reports.db` keeps its tasks and just gets the new
+  table.
