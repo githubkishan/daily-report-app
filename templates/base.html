@@ -24,6 +24,16 @@
     header h1 { margin: 0; font-size: 1.5rem; }
     header nav a { color: white; margin-left: 16px; text-decoration: none; opacity: .85; }
     header nav a:hover { opacity: 1; text-decoration: underline; }
+    header nav { display: flex; align-items: center; flex-wrap: wrap; }
+    header nav form { display: inline; margin-left: 16px; }
+    header .user { margin-left: 16px; padding-left: 16px; border-left: 1px solid rgba(255,255,255,.4);
+                   font-weight: 600; }
+    .link-button { background: none; padding: 0; color: white; opacity: .85; font-size: 1rem; }
+    .link-button:hover { text-decoration: underline; opacity: 1; }
+    .auth-card { max-width: 380px; margin: 40px auto; }
+    .auth-card form { display: flex; flex-direction: column; gap: 12px; }
+    .auth-card label { flex: none; }
+    .auth-card p { font-size: .9rem; }
     .container { max-width: 800px; margin: 0 auto; padding: 0 16px; }
     .card { background: white; border-radius: 8px; padding: 20px; margin: 20px 0;
             box-shadow: 0 1px 3px rgba(0,0,0,.1); }
@@ -68,10 +78,18 @@
   <header>
     <div class="container">
       <h1>Daily Report</h1>
-      <nav>
-        <a href="{{ url_for('index') }}">Today</a>
-        <a href="{{ url_for('history') }}">History</a>
-      </nav>
+      {# g.user is set in app.py before every request (None when logged out) #}
+      {% if g.user %}
+        <nav>
+          <a href="{{ url_for('index') }}">Today</a>
+          <a href="{{ url_for('history') }}">History</a>
+          <span class="user">{{ g.user.username }}</span>
+          {# Log out is a POST (a button in a form), like every other action #}
+          <form method="POST" action="{{ url_for('logout') }}">
+            <button type="submit" class="link-button">Log out</button>
+          </form>
+        </nav>
+      {% endif %}
     </div>
   </header>
 
