@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}Log in – Daily Report{% endblock %}
+
+{% block content %}
+  <div class="card auth-card">
+    <h2>Log in</h2>
+    <form method="POST" action="{{ url_for('login') }}">
+      {# autocomplete hints let the browser's password manager fill these in #}
+      <label>Username <input type="text" name="username" autocomplete="username" required autofocus></label>
+      <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
+      <button type="submit">Log in</button>
+    </form>
+    <p>No account yet? <a href="{{ url_for('register') }}">Create one</a></p>
+  </div>
+{% endblock %}

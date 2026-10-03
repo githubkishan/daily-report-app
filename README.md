@@ -1,7 +1,7 @@
 # Daily Report
 
 A small Flask + SQLite app for logging the tasks you work on each day.
-You can add, list, edit and delete tasks (title, optional link, hours),
+Each person creates an account and only sees their own data. You can add, list, edit and delete tasks (title, optional link, hours),
 track time on each task with a Start/Stop timer, write a daily report
 (subject + tomorrow's plan) and look back at past reports on the History page.
 
@@ -16,7 +16,7 @@ pip install -r requirements.txt
 python app.py
 ```
 
-Then open http://127.0.0.1:5000 in your browser.
+Then open http://127.0.0.1:5000 in your browser and create an account.
 The database file `reports.db` is created automatically on first run.
 
 ## Files
@@ -27,6 +27,7 @@ The database file `reports.db` is created automatically on first run.
 - `templates/index.html` – today's report page
 - `templates/history.html` – the list of past reports
 - `templates/report.html` – one past day, read-only
+- `templates/login.html`, `templates/register.html` – log in and sign up
 
 ## How it works
 
@@ -71,10 +72,10 @@ and the template shows it once.
 
 ## How profile and report status work
 
-- **Profile.** The `profile` table only ever uses one row. The first time you
-  press *Save profile* the app INSERTs it; after that it UPDATEs the same row.
-- **One report per day.** `daily_reports` has one row per date
-  (`report_date` is UNIQUE). The row is created the first time you press
+- **Profile.** Each user has one row in the `profile` table. The first time
+  you press *Save profile* the app INSERTs it; after that it UPDATEs that row.
+- **One report per day.** `daily_reports` has one row per user per date
+  (`UNIQUE (user_id, report_date)`). The row is created the first time you press
   *Save draft* or *Mark as synced* for that day.
 - **Tasks belong to a day.** `tasks` has a `report_date` column, and new tasks
   get today's date. The Today page only shows today's tasks. The column was
@@ -88,3 +89,30 @@ and the template shows it once.
   - *Unlock to edit* sets it back to `draft` so you can change it again.
 - **History.** `/history` lists every saved report with its status and
   subject. Click a date to open `/report/<date>`, a read-only view of that day.
+
+## How user accounts work
+
+- **Sign up and log in.** `/register` creates a row in the `users` table,
+  and `/login` checks the username and password. Usernames ignore upper/lower
+  case (`Kishan` and `kishan` are the same user).
+- **Passwords are never stored.** Only a *hash* is saved
+  (`generate_password_hash` from werkzeug, which comes with Flask). A hash
+  can't be turned back into the password; at login, `check_password_hash`
+  compares the typed password against it.
+- **Staying logged in.** After login, Flask stores your user id in the
+  `session`, a signed cookie in your browser. Each browser (or browser
+  profile) has its own cookie, so two profiles can be two different users.
+- **Everyone else goes to the login page.** `@app.before_request` runs before
+  every request. If nobody is logged in, it redirects to `/login` (only
+  `/login` and `/register` are open to everyone).
+- **Your data is yours.** `tasks`, `daily_reports` and `profile` have a
+  `user_id` column, and every query includes `WHERE user_id = ?`. Even if you
+  type another task's id into a URL, you can't see or change it.
+- **Upgrading an old database.** On startup `init_db()` adds the `user_id`
+  columns with `ALTER TABLE`, and rebuilds `daily_reports` (so the unique
+  rule becomes per user). The **first account you create** gets all the
+  tasks, reports and profile from before accounts existed.
+- **Going live.** Set a `SECRET_KEY` environment variable to a long random
+  value (for example the output of
+  `python -c "import secrets; print(secrets.token_hex(32))"`), and don't run
+  with `debug=True` on a public server.
